@@ -159,8 +159,7 @@ void goFront(int ms_delay) {
   digitalWrite(pinRF,HIGH);
   digitalWrite(pinLB,LOW);  
   digitalWrite(pinLF,HIGH);
-  
-  if (ms_delay > 0) delay(ms_delay);
+  delay(ms_delay);
 }
 
 /**
@@ -171,8 +170,7 @@ void goBack(int ms_delay) {
   digitalWrite(pinRF,LOW);
   digitalWrite(pinLB,HIGH);  
   digitalWrite(pinLF,LOW);
-
-  if (ms_delay > 0) delay(ms_delay);
+  delay(ms_delay);
 }
 
 /**
@@ -183,7 +181,7 @@ void goLeft(int ms_delay) {
   digitalWrite(pinRF,HIGH);
   digitalWrite(pinLB,HIGH);   
   digitalWrite(pinLF,LOW);
-  if (ms_delay > 0) delay(ms_delay);
+  delay(ms_delay);
 }
 
 /**
@@ -194,7 +192,7 @@ void goRight(int ms_delay) {
   digitalWrite(pinRF,LOW);
   digitalWrite(pinLB,LOW);   
   digitalWrite(pinLF,HIGH);
-  if (ms_delay > 0) delay(ms_delay);
+  delay(ms_delay);
 }
 
 /**
@@ -205,7 +203,7 @@ void goStop(int ms_delay) {
   digitalWrite(pinRF,LOW);
   digitalWrite(pinLB,LOW);   
   digitalWrite(pinLF,LOW);
-  if (ms_delay > 0) delay(ms_delay);
+  delay(ms_delay);
 }
 
 /**
