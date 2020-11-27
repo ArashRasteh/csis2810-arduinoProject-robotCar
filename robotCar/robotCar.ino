@@ -24,7 +24,8 @@ const int SERVO_GEAR_OFFSET = 3;    // has to be between -45 to 45
 const int LOOK_FORWARD = 90 + SERVO_GEAR_OFFSET;
 const int LOOK_RIGHT = 45 + SERVO_GEAR_OFFSET;
 const int LOOK_LEFT = 135 + SERVO_GEAR_OFFSET;
-const int SERVO_STABILITY_DELAY = 250;
+const int LOOK_CYCLE[] = {LOOK_LEFT, LOOK_FORWARD, LOOK_RIGHT, LOOK_FORWARD};
+const int SERVO_STABILITY_DELAY = 250;  // The maximum time for going from left to right with servo
 // Came to this number by measuring 4 objects and averaging the results. equal to 1/6.15. Need to multiply to distance.
 const float SERVO_DIST_TO_MM = 0.1625;    
 
@@ -32,10 +33,16 @@ const float SERVO_DIST_TO_MM = 0.1625;
 const int pinUssIn = 9;  // Define the signal receiving pin
 const int pinUssOut = 8;  // Define the signal emitting pin
 float distAvg = 0;
-int counter = 0;
+unsigned char counter = 0;
 
 // logic variables
+const float           triggerDistance = 250;
+const unsigned char   motorPwmPower = 150;
+unsigned long currentTime;
 unsigned long lastServoTime;
+int lookCycleCounter = 3; // starts with looking forward
+boolean allDistancesFilled = false;
+float distances[3]; // 0 left, 1 front, 2 right;
 
 void setup() {
   // Setting Serial data rate in bits per second
@@ -50,8 +57,8 @@ void setup() {
   pinMode(MotorRPWM,  OUTPUT);
 
   // Set up the starting/default PWM of both motors
-  analogWrite(MotorLPWM,230); 
-  analogWrite(MotorRPWM,230); 
+  analogWrite(MotorLPWM,motorPwmPower); 
+  analogWrite(MotorRPWM,motorPwmPower); 
 
   // Set up ultrasound sensor
   pinMode(pinUssIn, INPUT);
@@ -68,55 +75,15 @@ void setup() {
 
   delay(250);
 
-//  doHappyDance();  
+  doHappyDance();  
 }
 
 void loop() {
-    Serial.println(get_current_distance_in_mm());
-  delay(200);
+  currentTime = millis();
 
+  lookAround();
 
-//  delay(250);
-//  ussServo.write(LOOK_LEFT); 
-//  delay(250);
-//  ussServo.write(LOOK_RIGHT); 
-
-//    Serial.print(ussServo.read());
-//    Serial.print(" ");
-//    Serial.print(get_current_distance());
-//    Serial.println();
-//
-//    delay(100);
-//  
-
-//  delay(500);
-//
-
-//  int ussServoRead = ussServo.read();
-//  if (counter == 0 && ussServoRead == LOOK_RIGHT) {
-//    ussServo.write(LOOK_LEFT);
-//    Serial.println(ussServoRead);
-//    counter++;
-//  } else if (ussServoRead == LOOK_LEFT) {
-//    
-//  } else {
-//    Serial.println(ussServoRead);
-//    counter++;
-//  }
-
-//  int ussServoRead = ussServo.read();
-//
-//  for (int i = 0; i < 20; i++) {
-//    Serial.println(ussServoRead);
-//    delay(5);
-//  }
-//  delay(500);
-//  if (ussServoRead == LOOK_RIGHT) {
-//    ussServo.write(LOOK_LEFT);
-//  } else {
-//    ussServo.write(LOOK_RIGHT);
-//  }
-
+  if (allDistancesFilled) stateMachine();
 }
 
 /**
@@ -130,25 +97,107 @@ void stateMachine() {
    * While turning continue to check the front until there is a good enough distance to move forward
    * After turning check all around again before moving forward.
    */
+  boolean changeState = false;
+  int distArrIndex; // which index triggered the changeState
+  
+  for (int i = 0; i < 3; i++) {
+    if (distances[i] < triggerDistance) {
+      changeState = true;
+      distArrIndex = i;
+      break;
+    }
+  }
+
+  if (changeState == true){
+    //Front triggered
+    if (distArrIndex == 1) {
+      if (distances[0] < distances[2]) distArrIndex = 0;
+      else if (distances[2] < distances[0]) distArrIndex = 2;
+    }
+    
+    switch(distArrIndex) {
+      case 0:
+        // Left triggered / Go right
+        goRight(500);
+        goStop(0);
+        break;
+      case 1:
+        // Go Back and left
+        goBack(250);
+        goLeft(500);
+        goStop(0);
+        break;
+      case 2:
+        // Right Triggered / Go Left
+        goLeft(500);
+        goStop(0);
+        break;
+    }
+    
+    lookCycleCounter = 3; // restarts with looking forward
+    allDistancesFilled = false;
+    ussServo.write(LOOK_CYCLE[lookCycleCounter]);
+    delay(125);
+  } else {
+    goFront(0);
+  }
+
+}
+
+
+void lookAround() {
+  
+  if (currentTime - lastServoTime >= SERVO_STABILITY_DELAY / 2) {
+    
+    switch(lookCycleCounter) {
+      case 0:
+        // Looks left
+        distances[0] = get_current_distance_in_mm();
+        break;
+      case 1:
+      case 3:
+        // Looks Forward
+        distances[1] = get_current_distance_in_mm();
+        break;
+      case 2:
+        // Looks Right
+        distances[2] = get_current_distance_in_mm();
+        break;
+    }
+    
+    lookCycleCounter++;
+    lookCycleCounter %= 4;
+    
+    ussServo.write(LOOK_CYCLE[lookCycleCounter]);
+    lastServoTime = currentTime;
+
+    if (lookCycleCounter == 3) allDistancesFilled = true;
+    if (lookCycleCounter == 0) printDistArray();
+  }
 }
 
 /**
  * Gets current distance in millimeters
  */
 float get_current_distance_in_mm() {
-  float avgDist = 0;
-  for (int i = 0; i < 5; i++){
-    delay(5);
-    digitalWrite(pinUssOut, LOW);
-    delayMicroseconds(2);
-    digitalWrite(pinUssOut, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(pinUssOut, LOW);
-    
-    avgDist += pulseIn(pinUssIn, HIGH)*SERVO_DIST_TO_MM * 0.2;
-  }
+  digitalWrite(pinUssOut, LOW);
+  delayMicroseconds(20);
+  digitalWrite(pinUssOut, HIGH);
+  delayMicroseconds(100);
+  digitalWrite(pinUssOut, LOW);
 
-  return avgDist;
+  return pulseIn(pinUssIn, HIGH)*SERVO_DIST_TO_MM;
+}
+
+/**
+ * Prints the distances array into the Serial Monitor
+ */
+void printDistArray() {
+  for (int i = 0; i < 3; i++) {
+    Serial.print(distances[i]);
+    if (i + 1 != 3) Serial.print(", ");
+  }
+  Serial.print("\n");
 }
 
 /**
@@ -246,5 +295,5 @@ void doHappyDance() {
   goRight(100);
   goStop(800);
   ussServo.write(LOOK_FORWARD);
-  delay(250);
+  delay(750);
 }
